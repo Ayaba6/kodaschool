@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* On définit la variable pour plus de flexibilité */
+    --font-koda: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-koda);
+    /* Rendu ultra-pro des caractères sur tous les écrans */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    @apply bg-[#F8FAFC] text-[#111827];
+  }
+
+  /* Harmonisation basée sur tes captures (Sideba/Pol.png) */
+  h1, h2, h3, h4 {
+    /* Font-black (900) + tracking-tighter = le look SaaS moderne */
+    @apply font-black tracking-tighter italic;
+  }
+
+  /* Style spécifique pour les petits labels (comme sous le nom de profil) */
+  label, .text-caption {
+    @apply font-bold uppercase tracking-widest text-slate-400;
+  }
+}
+
+@layer components {
+  /* Classe utilitaire pour les cartes blanches harmonisées */
+  .koda-card {
+    @apply bg-white border border-slate-100 shadow-sm rounded-[24px] transition-all duration-300;
+  }
+
+  /* Style des inputs comme sur pol.PNG */
+  .koda-input {
+    @apply bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm 
+           focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none 
+           transition-all placeholder:text-slate-400 font-medium;
+  }
+
+  /* Bouton violet signature (image pol.PNG) */
+  .btn-primary {
+    @apply bg-[#5551FF] hover:bg-[#4440FF] text-white px-5 py-2.5 rounded-lg 
+           font-bold text-sm flex items-center gap-2 transition-all 
+           active:scale-95 shadow-lg shadow-indigo-200;
+  }
+}
+
+/* Scrollbar fine et élégante pour coller au design system */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+}
