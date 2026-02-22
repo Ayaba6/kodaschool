@@ -1,30 +1,55 @@
 import React, { useState } from 'react';
 import { authService } from '../services/authService';
 import { useSchool } from '../hooks/useSchool';
+import { supabase } from '../lib/supabase'; // Import direct pour la vérification de profil
 
 export default function Login() {
   const { school } = useSchool();
+  const [isActivationMode, setIsActivationMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      // L'appel au service d'auth
-      await authService.login(email, password);
-      
-      // PLUS BESOIN de window.location.reload() !
-      // Le onAuthStateChange dans App.jsx va détecter la connexion 
-      // et changer l'interface instantanément.
-      console.log("Login réussi, App.jsx va basculer...");
+      if (isActivationMode) {
+        // --- LOGIQUE D'ACTIVATION ---
+        // 1. On vérifie si le profil existe déjà (créé par le directeur)
+        const { data: profile, error: pError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('email', email)
+          .single();
+
+        if (!profile || pError) {
+          throw new Error("Cet email n'est pas autorisé. Contactez votre établissement.");
+        }
+
+        // 2. On crée le compte Auth (le trigger SQL fera la liaison)
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (signUpError) throw signUpError;
+        
+        setSuccess("Compte activé avec succès ! Connexion en cours...");
+        // On attend 2 sec puis on connecte l'utilisateur
+        setTimeout(() => setIsActivationMode(false), 2000);
+
+      } else {
+        // --- LOGIQUE LOGIN CLASSIQUE ---
+        await authService.login(email, password);
+      }
       
     } catch (err) {
-      // On capture l'erreur de Supabase proprement
       setError(err.message === 'Invalid login credentials' 
         ? "Email ou mot de passe incorrect." 
         : err.message);
@@ -34,56 +59,66 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg border border-gray-100">
-        <div className="text-center">
+    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-[40px] shadow-2xl shadow-slate-200 border border-slate-100 relative overflow-hidden">
+        
+        {/* Déco subtile */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -mr-16 -mt-16 z-0" />
+
+        <div className="text-center relative z-10">
           {school?.logo_url ? (
-            <img className="mx-auto h-20 w-auto mb-4" src={school.logo_url} alt="Logo" />
+            <img className="mx-auto h-20 w-auto mb-6 drop-shadow-sm" src={school.logo_url} alt="Logo" />
           ) : (
             <div 
-              style={{ backgroundColor: school?.primary_color + '20', color: school?.primary_color }}
-              className="mx-auto h-16 w-16 rounded-2xl flex items-center justify-center font-black text-2xl mb-4"
+              style={{ backgroundColor: (school?.primary_color || '#5551FF') + '15', color: school?.primary_color || '#5551FF' }}
+              className="mx-auto h-20 w-20 rounded-3xl flex items-center justify-center font-black text-3xl mb-6 shadow-inner"
             >
-              {school?.name?.charAt(0)}
+              {school?.name?.charAt(0) || 'K'}
             </div>
           )}
-          <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-            {school?.name || "KodaSchool"}
+          <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">
+            {isActivationMode ? "Activer mon compte" : (school?.name || "KodaSchool")}
           </h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Espace de gestion administrative
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+            {isActivationMode ? "Choisissez votre mot de passe" : "Espace de gestion administrative"}
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-10 space-y-6 relative z-10" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 text-red-700 text-sm rounded flex items-center">
-               <span className="mr-2">⚠️</span> {error}
+            <div className="bg-rose-50 border-l-4 border-rose-500 p-4 text-rose-700 text-xs font-bold rounded-xl animate-shake">
+               ⚠️ {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 text-emerald-700 text-xs font-bold rounded-xl">
+               ✅ {success}
             </div>
           )}
           
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">
                 Email Professionnel
               </label>
               <input
                 type="email"
                 required
-                className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="directeur@ecole.com"
+                className="block w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#5551FF]/20 focus:bg-white transition-all shadow-sm"
+                placeholder="nom@ecole.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
-                Mot de passe
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                {isActivationMode ? "Créer un mot de passe" : "Mot de passe"}
               </label>
               <input
                 type="password"
                 required
-                className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="block w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#5551FF]/20 focus:bg-white transition-all shadow-sm"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -91,23 +126,32 @@ export default function Login() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ backgroundColor: school?.primary_color || '#2563eb' }}
-            className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-          >
-            {loading ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Vérification...
-              </span>
-            ) : "Accéder à mon tableau de bord"}
-          </button>
+          <div className="space-y-4">
+            <button
+              type="submit"
+              disabled={loading}
+              style={{ backgroundColor: school?.primary_color || '#5551FF' }}
+              className="w-full py-4 px-6 border border-transparent text-xs font-black uppercase tracking-[0.2em] italic rounded-2xl text-white hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-indigo-100"
+            >
+              {loading ? "Traitement..." : (isActivationMode ? "Confirmer l'activation" : "Accéder à mon espace")}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsActivationMode(!isActivationMode);
+                setError(null);
+              }}
+              className="w-full text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-[#5551FF] transition-colors"
+            >
+              {isActivationMode ? "Retour à la connexion" : "Première connexion ? Activez votre compte"}
+            </button>
+          </div>
         </form>
+
+        <p className="mt-8 text-center text-[9px] font-bold text-slate-300 uppercase tracking-[0.3em]">
+          Powered by KodaSchool Sync
+        </p>
       </div>
     </div>
   );

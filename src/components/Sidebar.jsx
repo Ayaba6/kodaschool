@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
+import { supabase } from '../lib/supabase'; // Import manquant corrigé
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Users, GraduationCap, BookOpen, 
   Settings, School, ChevronLeft, ChevronRight, LogOut,
   Bell, ShieldCheck, Palette, Zap, Menu, X,
-  ClipboardList, Calendar, FileText, CreditCard, UserX, BarChart3
+  ClipboardList, Calendar, FileText, CreditCard, UserX, BarChart3, Briefcase
 } from 'lucide-react';
 
-// Configuration des menus basée sur ton image sideb.PNG
+// Configuration des menus dynamique par rôle
 const MENU_CONFIG = {
   super_admin: [
     { icon: LayoutDashboard, label: "Vue d'ensemble", id: 'admin-dash' },
@@ -18,7 +19,7 @@ const MENU_CONFIG = {
   admin: [
     { icon: LayoutDashboard, label: 'Tableau de bord', id: 'admin-dash' },
     { icon: Users, label: 'Élèves', id: 'students' },
-    { icon: GraduationCap, label: 'Enseignants', id: 'teachers' },
+    { icon: Briefcase, label: 'Personnel (Staff)', id: 'staff' },
     { icon: BookOpen, label: 'Classes', id: 'classes' },
     { icon: ClipboardList, label: 'Matières', id: 'subjects' },
     { icon: Calendar, label: 'Emploi du temps', id: 'schedule' },
@@ -27,6 +28,31 @@ const MENU_CONFIG = {
     { icon: UserX, label: 'Absences', id: 'attendance' },
     { icon: BarChart3, label: 'Bulletins', id: 'reports' },
     { icon: Settings, label: 'Paramètres', id: 'settings' },
+  ],
+  secretariat: [
+    { icon: LayoutDashboard, label: 'Tableau de bord', id: 'admin-dash' },
+    { icon: Users, label: 'Élèves', id: 'students' },
+    { icon: UserX, label: 'Présences', id: 'attendance' },
+    { icon: Calendar, label: 'Planning', id: 'schedule' },
+    { icon: Briefcase, label: 'Annuaire Staff', id: 'staff' },
+  ],
+  teacher: [
+    { icon: LayoutDashboard, label: 'Mes Classes', id: 'admin-dash' },
+    { icon: UserX, label: 'Appel', id: 'attendance' },
+    { icon: FileText, label: 'Saisir Notes', id: 'grades' },
+    { icon: Calendar, label: 'Mon Agenda', id: 'schedule' },
+  ],
+  comptable: [
+    { icon: LayoutDashboard, label: 'Finance Dashboard', id: 'admin-dash' },
+    { icon: CreditCard, label: 'Encaissements', id: 'payments' },
+    { icon: Briefcase, label: 'Salaires Staff', id: 'staff' },
+    { icon: FileText, label: 'Rapports Financiers', id: 'reports' },
+  ],
+  parent: [
+    { icon: LayoutDashboard, label: 'Suivi Enfant', id: 'admin-dash' },
+    { icon: FileText, label: 'Notes & Bulletins', id: 'reports' },
+    { icon: UserX, label: 'Absences', id: 'attendance' },
+    { icon: CreditCard, label: 'Scolarité', id: 'payments' },
   ]
 };
 
@@ -34,12 +60,19 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   
-  // On récupère le menu selon le rôle (par défaut admin)
   const menuItems = MENU_CONFIG[profile?.role] || MENU_CONFIG.admin;
+
+  const roleLabels = {
+    super_admin: 'Network Admin',
+    admin: 'Directeur',
+    secretariat: 'Secrétariat',
+    teacher: 'Enseignant',
+    comptable: 'Comptabilité',
+    parent: 'Espace Parent'
+  };
 
   const SidebarContent = ({ mobile = false }) => (
     <>
-      {/* Bouton de réduction (Desktop) */}
       {!mobile && (
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -49,7 +82,6 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
         </button>
       )}
 
-      {/* Header : Logo & Nom */}
       <div className={`p-6 mb-4 flex items-center gap-3 ${mobile ? 'justify-between' : ''}`}>
         <div className="flex items-center gap-3">
           <div className="bg-[#5551FF] p-2.5 rounded-2xl text-white shrink-0 shadow-xl shadow-indigo-500/20">
@@ -71,7 +103,6 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
         )}
       </div>
 
-      {/* Navigation - Liste des items */}
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
         {menuItems.map((item) => {
           const isActive = activeTab === item.id;
@@ -94,18 +125,11 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
                   {item.label}
                 </span>
               )}
-              {/* Tooltip en mode réduit */}
-              {isCollapsed && !mobile && (
-                <div className="absolute left-full ml-4 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity font-bold z-[100] whitespace-nowrap">
-                  {item.label}
-                </div>
-              )}
             </button>
           );
         })}
       </nav>
 
-      {/* Footer : Utilisateur */}
       <div className="p-4 mt-auto border-t border-slate-800/50">
         <div className="p-3 rounded-2xl bg-slate-800/30 border border-slate-700/30">
           <div className="flex items-center gap-3">
@@ -118,12 +142,12 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
                   {profile?.first_name} {profile?.last_name}
                 </p>
                 <p className="text-[10px] text-indigo-400 uppercase font-bold tracking-tighter italic">
-                  {profile?.role === 'super_admin' ? 'Super Admin' : 'Directeur'}
+                  {roleLabels[profile?.role] || 'Utilisateur'}
                 </p>
               </div>
             )}
             {(mobile || !isCollapsed) && (
-              <button onClick={() => window.location.reload()} className="text-slate-500 hover:text-red-400 transition-colors">
+              <button onClick={() => supabase.auth.signOut()} className="text-slate-500 hover:text-red-400 transition-colors">
                 <LogOut size={16} />
               </button>
             )}
@@ -135,7 +159,6 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
 
   return (
     <>
-      {/* Version Mobile : Bouton Burger */}
       <div className="lg:hidden fixed top-4 left-4 z-[60]">
         <button 
           onClick={() => setIsMobileOpen(true)}
@@ -145,7 +168,6 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
         </button>
       </div>
 
-      {/* Version Desktop : Animée */}
       <motion.div 
         animate={{ width: isCollapsed ? 85 : 280 }}
         className="hidden lg:flex h-screen bg-[#0F172A] text-slate-400 flex-col relative border-r border-slate-800 z-20 shrink-0 shadow-2xl"
@@ -153,7 +175,6 @@ export default function Sidebar({ profile, activeTab, setActiveTab }) {
         <SidebarContent />
       </motion.div>
 
-      {/* Overlay Mobile */}
       <AnimatePresence>
         {isMobileOpen && (
           <>

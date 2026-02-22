@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import { getSubdomain } from './utils/tenant';
 import { useSchool } from './hooks/useSchool';
@@ -11,19 +11,10 @@ import Sidebar from './components/Sidebar';
 
 // Pages École
 import SchoolDashboard from './pages/school/Dashboard';
+import SecretaryDashboard from './pages/school/SecretaryDashboard';
+import ParentDashboard from './pages/school/ParentDashboard';
 import StudentsPage from './pages/school/Students';
-import TeachersPage from './pages/school/Teachers';
-import ClassesPage from './pages/school/Classes';
-import SubjectsPage from './pages/school/Subjects';
-import PaymentsPage from './pages/school/Payments';
-import AttendancePage from './pages/school/Attendance';
-import SettingsPage from './pages/school/Settings';
-import AssignmentsPage from './pages/school/Assignments'; // <--- NOUVEAU
-
-// Nouveaux Modules Intégrés
-import SchedulePage from './pages/school/Schedule';
-import GradesPage from './pages/school/Grades';
-import ReportsPage from './pages/school/Reports';
+import StaffPage from './pages/school/Staff';
 
 function App() {
   const subdomain = getSubdomain();
@@ -33,92 +24,118 @@ function App() {
   const [initializing, setInitializing] = useState(true);
   const [activeTab, setActiveTab] = useState('admin-dash');
 
-  const isMounted = useRef(false);
-
   useEffect(() => {
-    if (isMounted.current) return;
-    isMounted.current = true;
-
-    const checkInitialSession = async () => {
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
-      if (initialSession) {
-        const { data: userProfile } = await supabase.from('profiles').select('*').eq('id', initialSession.user.id).single();
-        setProfile(userProfile);
-        setSession(initialSession);
-      }
+    const forceStop = setTimeout(() => {
       setInitializing(false);
+      console.log("⏱️ Safety Timeout");
+    }, 2500);
+
+    const fetchProfile = async (userId) => {
+      try {
+        const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+        console.log("Profil chargé:", data?.role); // Debug console
+        setProfile(data);
+      } catch (e) { 
+        console.error("Erreur profil:", e); 
+      }
     };
 
-    checkInitialSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (newSession) {
-        const { data: userProfile } = await supabase.from('profiles').select('*').eq('id', newSession.user.id).single();
-        setProfile(userProfile);
-        setSession(newSession);
-      } else {
-        setSession(null);
-        setProfile(null);
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (s) {
+        setSession(s);
+        fetchProfile(s.user.id);
       }
+      setInitializing(false);
+      clearTimeout(forceStop);
     });
 
-    return () => subscription.unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s) fetchProfile(s.user.id);
+      else setProfile(null);
+      setInitializing(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(forceStop);
+    };
   }, []);
 
-  if (initializing || (subdomain && subdomain !== 'admin' && schoolLoading)) {
+  // 1. CHARGEMENT
+  if (initializing) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#F8FAFC]">
-        <div className="w-12 h-12 border-4 border-[#5551FF] border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 font-black italic text-slate-400 animate-pulse tracking-tighter">KodaSchool Syncing...</p>
+      <div className="h-screen flex items-center justify-center bg-slate-50 font-black italic text-slate-400 animate-pulse">
+        KODASCHOOL SYNC...
       </div>
     );
   }
 
+  // 2. AUTHENTIFICATION
   if (!session) return <Login />;
 
+  // 3. LOGIQUE DE RENDU DES DASHBOARDS (IIFE pour éviter les bugs de switch)
+  const renderMainContent = () => {
+    // Si on est sur un onglet spécifique (autre que le dashboard)
+    if (activeTab === 'students') return <StudentsPage school={school} />;
+    if (activeTab === 'staff') return <StaffPage school={school} />;
+
+    // Si on est sur l'onglet 'admin-dash', on filtre par rôle
+    if (activeTab === 'admin-dash') {
+      if (profile.role === 'super_admin') return <SuperAdmin activeTab={activeTab} />;
+      
+      if (school) {
+        if (profile.role === 'admin') return <SchoolDashboard school={school} profile={profile} onNavigate={setActiveTab} />;
+        if (profile.role === 'secretariat') return <SecretaryDashboard school={school} profile={profile} onNavigate={setActiveTab} />;
+        if (profile.role === 'parent') return <ParentDashboard school={school} profile={profile} />;
+        
+        // Rôle inconnu
+        return (
+          <div className="p-10 bg-white rounded-3xl text-center">
+            <p className="font-black italic text-slate-400 uppercase">Espace {profile.role} en cours</p>
+          </div>
+        );
+      }
+
+      // École introuvable
+      return (
+        <div className="p-12 bg-white rounded-[40px] border-2 border-dashed border-slate-200 text-center">
+          <h2 className="text-xl font-black italic text-slate-400 uppercase">École introuvable</h2>
+          <p className="text-slate-400 text-sm mt-2 tracking-tight">Vérifiez le sous-domaine : {subdomain}</p>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   return (
-    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden text-slate-900">
-      <Sidebar profile={profile} activeTab={activeTab} setActiveTab={setActiveTab} />
+    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden">
+      {profile ? (
+        <Sidebar profile={profile} activeTab={activeTab} setActiveTab={setActiveTab} />
+      ) : (
+        <div className="w-20 lg:w-[280px] bg-[#0F172A] h-full animate-pulse" />
+      )}
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header profile={profile} />
-
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12">
+        
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-[1400px] mx-auto">
             
-            {/* LOGIQUE DE NAVIGATION ÉCOLE */}
-            {profile?.role !== 'super_admin' && school && (
-              <div className="animate-in fade-in duration-500">
-                {/* Dashboard avec fonction de navigation pour les raccourcis */}
-                {activeTab === 'admin-dash' && (
-                  <SchoolDashboard 
-                    school={school} 
-                    profile={profile} 
-                    onNavigate={(tab) => setActiveTab(tab)} 
-                  />
-                )}
-                
-                {/* Gestion des entités */}
-                {activeTab === 'students' && <StudentsPage school={school} />}
-                {activeTab === 'teachers' && <TeachersPage school={school} />}
-                {activeTab === 'classes' && <ClassesPage school={school} />}
-                {activeTab === 'subjects' && <SubjectsPage school={school} />}
-                {activeTab === 'assignments' && <AssignmentsPage school={school} />} {/* <--- AJOUTÉ */}
-                
-                {/* Modules Pédagogiques */}
-                {activeTab === 'schedule' && <SchedulePage school={school} />}
-                {activeTab === 'grades' && <GradesPage school={school} />}
-                {activeTab === 'reports' && <ReportsPage school={school} />}
-                
-                {/* Gestion Administrative */}
-                {activeTab === 'payments' && <PaymentsPage school={school} />}
-                {activeTab === 'attendance' && <AttendancePage school={school} />}
-                {activeTab === 'settings' && <SettingsPage school={school} />}
-              </div>
+            {!profile && (
+              <p className="text-center py-20 font-black italic text-slate-300 animate-pulse">LIAISON COMPTE...</p>
             )}
 
-            {/* PORTAIL SUPER ADMIN */}
-            {profile?.role === 'super_admin' && <SuperAdmin activeTab={activeTab} />}
+            {profile && schoolLoading && profile.role !== 'super_admin' && (
+              <p className="text-center py-20 font-black italic text-indigo-300 animate-pulse">CHARGEMENT ECOLE...</p>
+            )}
+
+            {profile && (!schoolLoading || profile.role === 'super_admin') && (
+              <div className="animate-in fade-in duration-700">
+                {renderMainContent()}
+              </div>
+            )}
             
           </div>
         </main>
